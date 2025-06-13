@@ -130,11 +130,11 @@ func ClearLineEnd() {
 // Alternative screen
 
 func EnableAltScreen() {
-	EnableMode("47")
+	EnableMode("1049")
 }
 
 func DisableAltScreen() {
-	DisableMode("47")
+	DisableMode("1049")
 }
 
 // Mouse tracking
