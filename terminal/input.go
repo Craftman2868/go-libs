@@ -7,6 +7,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const STDIN = 0
 const CTRL = 31
 
 var old_termios unix.Termios

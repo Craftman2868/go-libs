@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Craftman2868/go/event"
+	"github.com/Craftman2868/go-libs/event"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 const ESC = 27
 
 type Parser struct {
-	handler *event.Eventable
+	handler event.Eventable
 
 	escape      bool
 	escape_time time.Time
@@ -98,7 +98,7 @@ const (
 
 // /Events
 
-func NewParser(handler *event.Eventable) Parser {
+func NewParser(handler event.Eventable) Parser {
 	var parser Parser
 
 	parser.handler = handler
@@ -232,8 +232,16 @@ func (parser *Parser) HandleChar(ch byte) {
 	parser.handler.HandleEvent(CharKeyEvent(ch, 0))
 }
 
+func (parser *Parser) CheckEscape() {
+	if parser.escape && time.Since(parser.escape_time) > ALT_TIMEOUT {
+		parser.escape = false
+		parser.handler.HandleEvent(SpecialKeyEvent(ESC))
+	}
+}
+
 func (parser *Parser) HandleInputs() {
 	for Hasch() {
 		parser.HandleChar(Getch())
 	}
+	parser.CheckEscape()
 }

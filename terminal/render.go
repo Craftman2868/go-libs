@@ -5,7 +5,6 @@ import (
 	"strconv"
 )
 
-const STDIN = 0
 const CSI = "\033["
 const CR = "\r"
 const LF = "\n"
@@ -19,6 +18,10 @@ func Write(text string) (int, error) {
 	return os.Stdout.Write([]byte(text))
 }
 
+func WriteBytes(bytes []byte) (int, error) {
+	return os.Stdout.Write(bytes)
+}
+
 func Writeln(text string) (int, error) {
 	n, err := Write(text)
 
@@ -29,7 +32,23 @@ func Writeln(text string) (int, error) {
 	n2, err2 := Write(NEWLINE)
 
 	if err2 != nil {
-		return n2, err2
+		return n + n2, err2
+	}
+
+	return n + n2, nil
+}
+
+func WritelnBytes(text []byte) (int, error) {
+	n, err := WriteBytes(text)
+
+	if err != nil {
+		return n, err
+	}
+
+	n2, err2 := Write(NEWLINE)
+
+	if err2 != nil {
+		return n + n2, err2
 	}
 
 	return n + n2, nil
@@ -39,6 +58,12 @@ func WriteAt(x, y int, text string) (int, error) {
 	SetCursorPos(x, y)
 
 	return Write(text)
+}
+
+func WriteBytesAt(x, y int, bytes []byte) (int, error) {
+	SetCursorPos(x, y)
+
+	return os.Stdout.Write(bytes)
 }
 
 // Mode
@@ -126,27 +151,4 @@ func DisableMouseTracking() {
 
 func SetStyle(style string) {
 	Write(CSI + style + "m")
-}
-
-// Init / quit
-
-func Init() {
-	InitInput()
-
-	HideCursor()
-	SaveCursor()
-	EnableAltScreen()
-	EnableMouseTracking()
-
-	ClearScreen()
-	SetCursorHome()
-}
-
-func Quit() {
-	DisableMouseTracking()
-	DisableAltScreen()
-	RestoreCursor()
-	ShowCursor()
-
-	QuitInput()
 }
