@@ -106,7 +106,7 @@ func NewParser(handler event.Eventable) Parser {
 	return parser
 }
 
-func (parser *Parser) HandleMouseEvent() {
+func (parser *Parser) handleMouseEvent() {
 	var ev MouseEvent
 
 	ev.Button = parser.csi_argv[1] & 3
@@ -117,7 +117,7 @@ func (parser *Parser) HandleMouseEvent() {
 	parser.handler.HandleEvent(ev)
 }
 
-func (parser *Parser) HandleComplexCSI() {
+func (parser *Parser) handleComplexCSI() {
 	n, err := strconv.Atoi(string(parser.csi_argv[:parser.csi_argc]))
 
 	if err != nil {
@@ -128,10 +128,10 @@ func (parser *Parser) HandleComplexCSI() {
 		return // Unknown key (there are other unknown keys but we won't test them all)
 	}
 
-	parser.handler.HandleEvent(SpecialKeyEvent(byte(n)))
+	parser.handler.HandleEvent(specialKeyEvent(byte(n)))
 }
 
-func CharKeyEvent(ch byte, mod byte) KeyEvent {
+func charKeyEvent(ch byte, mod byte) KeyEvent {
 	key := ch
 
 	if key >= 'a' && key <= 'z' {
@@ -148,7 +148,7 @@ func CharKeyEvent(ch byte, mod byte) KeyEvent {
 	return KeyEvent{ch, key, mod}
 }
 
-func SpecialKeyEvent(key byte) KeyEvent {
+func specialKeyEvent(key byte) KeyEvent {
 	return KeyEvent{0, key, 0}
 }
 
@@ -162,11 +162,11 @@ func (parser *Parser) HandleChar(ch byte) {
 			} else if ch == 'O' {
 				parser.ss3 = true
 			} else {
-				parser.handler.HandleEvent(CharKeyEvent(ch, MOD_ALT))
+				parser.handler.HandleEvent(charKeyEvent(ch, MOD_ALT))
 			}
 			return
 		}
-		parser.handler.HandleEvent(SpecialKeyEvent(ESC))
+		parser.handler.HandleEvent(specialKeyEvent(ESC))
 	} else if parser.csi {
 		if parser.csi_argc >= CSI_ARGV_BUFFER_SIZE {
 			parser.csi = false
@@ -177,23 +177,23 @@ func (parser *Parser) HandleChar(ch byte) {
 		parser.csi_argc++
 
 		if parser.csi_argv[0] == 'M' && parser.csi_argc == 4 {
-			parser.HandleMouseEvent()
+			parser.handleMouseEvent()
 		} else {
 			switch ch {
 			case 'A':
-				parser.handler.HandleEvent(SpecialKeyEvent(KEY_UP))
+				parser.handler.HandleEvent(specialKeyEvent(KEY_UP))
 			case 'B':
-				parser.handler.HandleEvent(SpecialKeyEvent(KEY_DOWN))
+				parser.handler.HandleEvent(specialKeyEvent(KEY_DOWN))
 			case 'C':
-				parser.handler.HandleEvent(SpecialKeyEvent(KEY_RIGHT))
+				parser.handler.HandleEvent(specialKeyEvent(KEY_RIGHT))
 			case 'D':
-				parser.handler.HandleEvent(SpecialKeyEvent(KEY_LEFT))
+				parser.handler.HandleEvent(specialKeyEvent(KEY_LEFT))
 			case 'H':
-				parser.handler.HandleEvent(SpecialKeyEvent(KEY_HOME))
+				parser.handler.HandleEvent(specialKeyEvent(KEY_HOME))
 			case 'F':
-				parser.handler.HandleEvent(SpecialKeyEvent(KEY_END))
+				parser.handler.HandleEvent(specialKeyEvent(KEY_END))
 			case '~':
-				parser.HandleComplexCSI()
+				parser.handleComplexCSI()
 			default:
 				return
 			}
@@ -219,7 +219,7 @@ func (parser *Parser) HandleChar(ch byte) {
 			return
 		}
 
-		parser.handler.HandleEvent(SpecialKeyEvent(key))
+		parser.handler.HandleEvent(specialKeyEvent(key))
 		return
 	}
 
@@ -229,13 +229,13 @@ func (parser *Parser) HandleChar(ch byte) {
 		return
 	}
 
-	parser.handler.HandleEvent(CharKeyEvent(ch, 0))
+	parser.handler.HandleEvent(charKeyEvent(ch, 0))
 }
 
 func (parser *Parser) CheckEscape() {
 	if parser.escape && time.Since(parser.escape_time) > ALT_TIMEOUT {
 		parser.escape = false
-		parser.handler.HandleEvent(SpecialKeyEvent(ESC))
+		parser.handler.HandleEvent(specialKeyEvent(ESC))
 	}
 }
 
