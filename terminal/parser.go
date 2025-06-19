@@ -3,6 +3,8 @@ package terminal
 import (
 	"strconv"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Craftman2868/go-libs/event"
 )
@@ -17,11 +19,13 @@ const ESC = 27
 type Parser struct {
 	handler event.Eventable
 
+	buf []byte
+
 	escape      bool
 	escape_time time.Time
 
 	csi      bool
-	csi_argv [CSI_ARGV_BUFFER_SIZE]uint8
+	csi_argv [CSI_ARGV_BUFFER_SIZE]rune
 	csi_argc uint8
 
 	ss3 bool
@@ -30,7 +34,7 @@ type Parser struct {
 // Events
 
 type KeyEvent struct {
-	Ch  byte
+	Ch  rune
 	Key byte
 	Mod uint8
 }
@@ -42,11 +46,19 @@ func (ev KeyEvent) Name() string {
 type MouseEvent struct {
 	Button uint8
 	Mod    uint8
-	X, Y   uint8
+	X, Y   uint16
 }
 
 func (ev MouseEvent) Name() string {
 	return "mouse"
+}
+
+type UnicodeErrorEvent struct {
+	Buf []byte
+}
+
+func (ev UnicodeErrorEvent) Name() string {
+	return "unicodeError"
 }
 
 const ( // MouseEvent.Button
@@ -54,6 +66,8 @@ const ( // MouseEvent.Button
 	BUTTON2
 	BUTTON3
 	RELEASE
+	SCROLL_UP
+	SCROLL_DOWN
 )
 
 const ( // MouseEvent.Mod / KeyEvent.Mod
@@ -108,11 +122,14 @@ func NewParser(handler event.Eventable) Parser {
 
 func (parser *Parser) handleMouseEvent() {
 	var ev MouseEvent
+	ev.Button = uint8(int32(parser.csi_argv[1]) & 3)
+	ev.Mod = uint8(int32(parser.csi_argv[1]) & 28)
+	ev.X = uint16(int32(parser.csi_argv[2]) - 33)
+	ev.Y = uint16(int32(parser.csi_argv[3]) - 33)
 
-	ev.Button = parser.csi_argv[1] & 3
-	ev.Mod = parser.csi_argv[1] & 28
-	ev.X = parser.csi_argv[2] - 33
-	ev.Y = parser.csi_argv[3] - 33
+	if int32(parser.csi_argv[1])&64 != 0 {
+		ev.Button += 4
+	}
 
 	parser.handler.HandleEvent(ev)
 }
@@ -131,18 +148,22 @@ func (parser *Parser) handleComplexCSI() {
 	parser.handler.HandleEvent(specialKeyEvent(byte(n)))
 }
 
-func charKeyEvent(ch byte, mod byte) KeyEvent {
-	key := ch
+func charKeyEvent(ch rune, mod byte) KeyEvent {
+	var key byte
 
-	if key >= 'a' && key <= 'z' {
-		key -= ' '
-	} else if key >= 'A' && key <= 'Z' {
-		mod |= MOD_SHIFT
-	}
+	if ch < unicode.MaxLatin1 {
+		key = byte(ch)
 
-	if key&CTRL == key {
-		key |= '@'
-		mod |= MOD_CTRL
+		if key >= 'a' && key <= 'z' {
+			key -= ' '
+		} else if key >= 'A' && key <= 'Z' {
+			mod |= MOD_SHIFT
+		}
+
+		if key&CTRL == key {
+			key |= '@'
+			mod |= MOD_CTRL
+		}
 	}
 
 	return KeyEvent{ch, key, mod}
@@ -152,7 +173,7 @@ func specialKeyEvent(key byte) KeyEvent {
 	return KeyEvent{0, key, 0}
 }
 
-func (parser *Parser) HandleChar(ch byte) {
+func (parser *Parser) HandleRune(ch rune) {
 	if parser.escape {
 		parser.escape = false
 		if time.Since(parser.escape_time) < ALT_TIMEOUT {
@@ -178,7 +199,7 @@ func (parser *Parser) HandleChar(ch byte) {
 
 		if parser.csi_argv[0] == 'M' && parser.csi_argc == 4 {
 			parser.handleMouseEvent()
-		} else {
+		} else if parser.csi_argc == 1 {
 			switch ch {
 			case 'A':
 				parser.handler.HandleEvent(specialKeyEvent(KEY_UP))
@@ -197,6 +218,8 @@ func (parser *Parser) HandleChar(ch byte) {
 			default:
 				return
 			}
+		} else {
+			return
 		}
 
 		parser.csi = false
@@ -230,6 +253,32 @@ func (parser *Parser) HandleChar(ch byte) {
 	}
 
 	parser.handler.HandleEvent(charKeyEvent(ch, 0))
+}
+
+func (parser *Parser) HandleChar(ch byte) {
+	// fmt.Printf("char: %d", ch)
+	// if ch >= 32 {
+	// 	fmt.Printf(", '%c'", ch)
+	// }
+	// fmt.Println()
+
+	parser.buf = append(parser.buf, ch)
+
+	if !utf8.FullRune(parser.buf) {
+		return
+	}
+
+	r, size := utf8.DecodeRune(parser.buf)
+
+	if r == utf8.RuneError {
+		parser.handler.HandleEvent(UnicodeErrorEvent{parser.buf})
+		parser.buf = parser.buf[:0]
+		return
+	}
+
+	parser.buf = parser.buf[size:]
+
+	parser.HandleRune(r)
 }
 
 func (parser *Parser) CheckEscape() {

@@ -141,9 +141,11 @@ func DisableAltScreen() {
 
 func EnableMouseTracking() {
 	EnableMode("1000")
+	EnableMode("1005")
 }
 
 func DisableMouseTracking() {
+	DisableMode("1005")
 	DisableMode("1000")
 }
 
