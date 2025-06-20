@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	CSI_ARGV_BUFFER_SIZE = 8
+	CSI_ARGV_BUFFER_SIZE = 16
 	ALT_TIMEOUT          = 50 * time.Millisecond
 )
 
@@ -33,6 +33,14 @@ type Parser struct {
 
 // Events
 
+type ModEvent interface {
+	event.Event
+	Shift() bool
+	Alt() bool
+	Ctrl() bool
+	Meta() bool
+}
+
 type KeyEvent struct {
 	Ch  rune
 	Key byte
@@ -43,22 +51,42 @@ func (ev KeyEvent) Name() string {
 	return "key"
 }
 
-func (ev KeyEvent) Ctrl() bool {
-	return ev.Mod&MOD_CTRL != 0
+func (ev KeyEvent) Shift() bool {
+	return ev.Mod&MOD_SHIFT != 0
 }
 
 func (ev KeyEvent) Alt() bool {
 	return ev.Mod&MOD_ALT != 0
 }
 
-func (ev KeyEvent) Shift() bool {
-	return ev.Mod&MOD_SHIFT != 0
+func (ev KeyEvent) Ctrl() bool {
+	return ev.Mod&MOD_CTRL != 0
+}
+
+func (ev KeyEvent) Meta() bool {
+	return ev.Mod&MOD_META != 0
 }
 
 type MouseEvent struct {
 	Button uint8
 	Mod    uint8
 	X, Y   uint16
+}
+
+func (ev MouseEvent) Shift() bool {
+	return ev.Mod&MOD_SHIFT != 0
+}
+
+func (ev MouseEvent) Alt() bool {
+	return ev.Mod&MOD_ALT != 0
+}
+
+func (ev MouseEvent) Ctrl() bool {
+	return ev.Mod&MOD_CTRL != 0
+}
+
+func (ev MouseEvent) Meta() bool {
+	return ev.Mod&MOD_META != 0
 }
 
 func (ev MouseEvent) Name() string {
@@ -92,10 +120,9 @@ const ( // MouseEvent.Button
 
 const ( // MouseEvent.Mod / KeyEvent.Mod
 	MOD_SHIFT = 1 << (iota + 2)
-	MOD_META
+	MOD_ALT
 	MOD_CTRL
-
-	MOD_ALT = MOD_META
+	MOD_META
 )
 
 const ( // Special keys
@@ -119,15 +146,18 @@ const ( // Special keys
 	KEY_F11      = 23
 	KEY_F12      = 24
 )
+const KEY_BACKSPACE = 127
 const (
-	// The value of the next keys doesn't matter
+	// The value of the next keys (except KEY_ESC) doesn't matter
 	KEY_UP = iota + 24
 	KEY_DOWN
 	KEY_RIGHT
 	KEY_ESC  = ESC // 27
 	KEY_LEFT = iota + 24
-	KEY_HOME
+	KEY_BEGIN
 	KEY_END
+	KEY_HOME
+	// Do not add any other key here: the next value is 32 (SPACE)
 )
 
 // /Events
@@ -155,18 +185,32 @@ func (parser *Parser) handleMouseEvent() {
 }
 
 func (parser *Parser) handleCSIError() {
-	parser.handler.HandleEvent(CSIErrorEvent{parser.csi_argv[:]})
+	parser.handler.HandleEvent(CSIErrorEvent{parser.csi_argv[:parser.csi_argc]})
+}
+	if len(buf) == 0 {
+		return 0, nil
+	}
+
+	n, err = strconv.Atoi(string(buf))
+
+	return
 }
 
 func parseCSIArgs(args []rune) (res []int, c rune, err error) {
-	var buf []rune
-	var n int
+	/*
+		The original sequence is analysed like that:
+		  sequence ::= CSI <args> <c>
+		  args ::= <arg> [';' <args>]  // max CSI_ARGV_BUFFER_SIZE characters
+		  arg: a decimal number (zero or more digits)
+		  c: any character which is not a digit and not a ';'
+	*/
 
-	c = args[len(args)-1]
+	var n int
+	buf := make([]rune, 0, CSI_ARGV_BUFFER_SIZE-1)
 
 	for _, ch := range args[:len(args)-1] {
 		if ch == ';' {
-			n, err = strconv.Atoi(string(buf))
+			n, err = parseNumber(buf)
 			if err != nil {
 				return
 			}
@@ -177,16 +221,57 @@ func parseCSIArgs(args []rune) (res []int, c rune, err error) {
 		}
 	}
 
-	n, err = strconv.Atoi(string(buf))
+	n, err = parseNumber(buf)
 	if err != nil {
 		return
 	}
 	res = append(res, n)
 
+	c = args[len(args)-1]
+
 	return
 }
 
-func (parser *Parser) handleComplexCSI() {
+func parseMod(arg int) byte {
+	/*
+		arg-1	arg	modifiers
+		MCAS
+		0001	2	shift
+		0010	3 	alt
+		0011	4 	shift + alt
+		0100	5	ctrl
+		0101	6	ctrl + shift
+		0110	7	ctrl + alt
+		0111	8	ctrl + shift + alt
+		1000	9	meta
+		1001	10	meta + shift
+		1010	11	meta + alt
+		1011	12	meta + shift + alt
+		1100	13	meta + ctrl
+		1101	14	meta + ctrl + shift
+		1110	15	meta + ctrl + alt
+		1111	16	meta + ctrl + shift + alt
+	*/
+	var mod byte = 0
+	arg--
+
+	if arg&1 != 0 {
+		mod |= MOD_SHIFT
+	}
+	if arg&2 != 0 {
+		mod |= MOD_ALT
+	}
+	if arg&4 != 0 {
+		mod |= MOD_CTRL
+	}
+	if arg&8 != 0 {
+		mod |= MOD_META
+	}
+
+	return mod
+}
+
+func (parser *Parser) handleCSI() {
 	args, c, err := parseCSIArgs(parser.csi_argv[:parser.csi_argc])
 
 	if err != nil {
@@ -194,49 +279,59 @@ func (parser *Parser) handleComplexCSI() {
 		return // Invalid CSI sequence
 	}
 
+	var ev KeyEvent
+
+	if len(args) >= 2 {
+		ev.Mod = parseMod(args[1])
+	} else {
+		ev.Mod = 0
+	}
+
+	ev.Key = byte(args[0])
+
 	switch c {
+	// For the sequences below ('A' to 'F'), args[0] should be 1 or 0 (not specified) but we won't check
+	case 'A':
+		ev.Key = KEY_UP
+	case 'B':
+		ev.Key = KEY_DOWN
+	case 'C':
+		ev.Key = KEY_RIGHT
+	case 'D':
+		ev.Key = KEY_LEFT
+	case 'E':
+		ev.Key = KEY_BEGIN
+	case 'F':
+		ev.Key = KEY_END
+	case 'H':
+		ev.Key = KEY_HOME
+
 	case '~':
-		if len(args) != 1 {
+		if args[0] == 27 && len(args) == 3 {
+			switch args[2] {
+			case 13:
+				ev.Key = '\n'
+			case 27:
+				ev.Key = ESC
+			default:
+				parser.handleCSIError()
+				return
+			}
+		} else if args[0] < KEY_INSERT || args[0] > KEY_F12 {
 			parser.handleCSIError()
-			return // Unknown sequence
+			return // unknown key
 		}
-		if args[0] < KEY_INSERT || args[0] > KEY_F12 {
-			parser.handleCSIError()
-			return // Unknown key (there are other unknown keys but we won't test them all)
-		}
-		parser.handler.HandleEvent(specialKeyEvent(byte(args[0])))
 	case 'u':
-		if len(args) != 2 {
-			parser.handleCSIError()
-			return // Unknown sequence
-		}
-		var ev KeyEvent
-
-		ev.Mod = MOD_CTRL
-
-		if (args[1]-5)&1 != 0 {
-			ev.Mod |= MOD_SHIFT
-		}
-		if (args[1]-5)&2 != 0 {
-			ev.Mod |= MOD_ALT
-		}
-		/*
-			00 5 -> ctrl
-			01 6 -> ctrl + shift
-			10 7 -> ctrl + alt
-			11 8 -> ctrl + alt + shift
-		*/
-
-		ev.Ch = rune(args[0])
-		ev.Key = byte(args[0])
 		if ev.Key >= 'a' && ev.Key <= 'z' {
 			ev.Key -= ' '
 		}
-		parser.handler.HandleEvent(ev)
+
 	default:
 		parser.handleCSIError()
 		return // Unknown last char
 	}
+
+	parser.handler.HandleEvent(ev)
 }
 
 func charKeyEvent(ch rune, mod byte) KeyEvent {
@@ -296,27 +391,10 @@ func (parser *Parser) HandleRune(ch rune) {
 			} else {
 				return
 			}
+		} else if (ch < '0' || ch > '9') && ch != ';' {
+			parser.handleCSI()
 		} else {
-			switch ch {
-			case 'A':
-				parser.handler.HandleEvent(specialKeyEvent(KEY_UP))
-			case 'B':
-				parser.handler.HandleEvent(specialKeyEvent(KEY_DOWN))
-			case 'C':
-				parser.handler.HandleEvent(specialKeyEvent(KEY_RIGHT))
-			case 'D':
-				parser.handler.HandleEvent(specialKeyEvent(KEY_LEFT))
-			case 'H':
-				parser.handler.HandleEvent(specialKeyEvent(KEY_HOME))
-			case 'F':
-				parser.handler.HandleEvent(specialKeyEvent(KEY_END))
-			case '~':
-				fallthrough
-			case 'u':
-				parser.handleComplexCSI()
-			default:
-				return
-			}
+			return
 		}
 
 		parser.csi = false
