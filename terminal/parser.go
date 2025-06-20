@@ -43,6 +43,18 @@ func (ev KeyEvent) Name() string {
 	return "key"
 }
 
+func (ev KeyEvent) Ctrl() bool {
+	return ev.Mod&MOD_CTRL != 0
+}
+
+func (ev KeyEvent) Alt() bool {
+	return ev.Mod&MOD_ALT != 0
+}
+
+func (ev KeyEvent) Shift() bool {
+	return ev.Mod&MOD_SHIFT != 0
+}
+
 type MouseEvent struct {
 	Button uint8
 	Mod    uint8
