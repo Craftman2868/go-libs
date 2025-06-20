@@ -61,6 +61,14 @@ func (ev UnicodeErrorEvent) Name() string {
 	return "unicodeError"
 }
 
+type CSIErrorEvent struct {
+	Buf []rune
+}
+
+func (ev CSIErrorEvent) Name() string {
+	return "CSIError"
+}
+
 const ( // MouseEvent.Button
 	BUTTON1 = iota
 	BUTTON2
@@ -134,18 +142,89 @@ func (parser *Parser) handleMouseEvent() {
 	parser.handler.HandleEvent(ev)
 }
 
+func (parser *Parser) handleCSIError() {
+	parser.handler.HandleEvent(CSIErrorEvent{parser.csi_argv[:]})
+}
+
+func parseCSIArgs(args []rune) (res []int, c rune, err error) {
+	var buf []rune
+	var n int
+
+	c = args[len(args)-1]
+
+	for _, ch := range args[:len(args)-1] {
+		if ch == ';' {
+			n, err = strconv.Atoi(string(buf))
+			if err != nil {
+				return
+			}
+			res = append(res, n)
+			buf = nil
+		} else {
+			buf = append(buf, ch)
+		}
+	}
+
+	n, err = strconv.Atoi(string(buf))
+	if err != nil {
+		return
+	}
+	res = append(res, n)
+
+	return
+}
+
 func (parser *Parser) handleComplexCSI() {
-	n, err := strconv.Atoi(string(parser.csi_argv[:parser.csi_argc]))
+	args, c, err := parseCSIArgs(parser.csi_argv[:parser.csi_argc])
 
 	if err != nil {
+		parser.handleCSIError()
 		return // Invalid CSI sequence
 	}
 
-	if n < KEY_INSERT || n > KEY_F12 {
-		return // Unknown key (there are other unknown keys but we won't test them all)
-	}
+	switch c {
+	case '~':
+		if len(args) != 1 {
+			parser.handleCSIError()
+			return // Unknown sequence
+		}
+		if args[0] < KEY_INSERT || args[0] > KEY_F12 {
+			parser.handleCSIError()
+			return // Unknown key (there are other unknown keys but we won't test them all)
+		}
+		parser.handler.HandleEvent(specialKeyEvent(byte(args[0])))
+	case 'u':
+		if len(args) != 2 {
+			parser.handleCSIError()
+			return // Unknown sequence
+		}
+		var ev KeyEvent
 
-	parser.handler.HandleEvent(specialKeyEvent(byte(n)))
+		ev.Mod = MOD_CTRL
+
+		if (args[1]-5)&1 != 0 {
+			ev.Mod |= MOD_SHIFT
+		}
+		if (args[1]-5)&2 != 0 {
+			ev.Mod |= MOD_ALT
+		}
+		/*
+			00 5 -> ctrl
+			01 6 -> ctrl + shift
+			10 7 -> ctrl + alt
+			11 8 -> ctrl + alt + shift
+		*/
+
+		ev.Ch = rune(args[0])
+		ev.Key = byte(args[0])
+		if ev.Key >= 'a' && ev.Key <= 'z' {
+			ev.Key -= ' '
+		}
+		parser.handler.HandleEvent(ev)
+	default:
+		parser.handleCSIError()
+		return // Unknown last char
+	}
 }
 
 func charKeyEvent(ch rune, mod byte) KeyEvent {
@@ -191,15 +270,21 @@ func (parser *Parser) HandleRune(ch rune) {
 	} else if parser.csi {
 		if parser.csi_argc >= CSI_ARGV_BUFFER_SIZE {
 			parser.csi = false
+			parser.handler.HandleEvent(CSIErrorEvent{parser.csi_argv[:parser.csi_argc]})
+			parser.HandleRune(ch)
 			return
 		}
 
 		parser.csi_argv[parser.csi_argc] = ch
 		parser.csi_argc++
 
-		if parser.csi_argv[0] == 'M' && parser.csi_argc == 4 {
-			parser.handleMouseEvent()
-		} else if parser.csi_argc == 1 {
+		if parser.csi_argv[0] == 'M' {
+			if parser.csi_argc == 4 {
+				parser.handleMouseEvent()
+			} else {
+				return
+			}
+		} else {
 			switch ch {
 			case 'A':
 				parser.handler.HandleEvent(specialKeyEvent(KEY_UP))
@@ -214,12 +299,12 @@ func (parser *Parser) HandleRune(ch rune) {
 			case 'F':
 				parser.handler.HandleEvent(specialKeyEvent(KEY_END))
 			case '~':
+				fallthrough
+			case 'u':
 				parser.handleComplexCSI()
 			default:
 				return
 			}
-		} else {
-			return
 		}
 
 		parser.csi = false
@@ -239,7 +324,7 @@ func (parser *Parser) HandleRune(ch rune) {
 		case 'S':
 			key = KEY_F4
 		default:
-			return
+			return // unknown ss3 sequence
 		}
 
 		parser.handler.HandleEvent(specialKeyEvent(key))
