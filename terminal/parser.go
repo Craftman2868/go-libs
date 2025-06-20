@@ -187,6 +187,8 @@ func (parser *Parser) handleMouseEvent() {
 func (parser *Parser) handleCSIError() {
 	parser.handler.HandleEvent(CSIErrorEvent{parser.csi_argv[:parser.csi_argc]})
 }
+
+func parseNumber(buf []rune) (n int, err error) {
 	if len(buf) == 0 {
 		return 0, nil
 	}
