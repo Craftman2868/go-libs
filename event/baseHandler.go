@@ -2,7 +2,6 @@ package event
 
 type BaseHandler struct {
 	handlers map[string][]func(Event)
-	// handlers: dict[str, list[Callable[[int], None]]]
 }
 
 func (h *BaseHandler) HandleEvent(event Event) {
