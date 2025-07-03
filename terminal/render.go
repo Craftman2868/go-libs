@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -64,6 +65,10 @@ func WriteBytesAt(x, y int, bytes []byte) (int, error) {
 	SetCursorPos(x, y)
 
 	return os.Stdout.Write(bytes)
+}
+
+func Writef(format string, args ...any) (int, error) {
+	return Write(fmt.Sprintf(format, args...))
 }
 
 // Mode
