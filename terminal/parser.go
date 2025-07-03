@@ -146,7 +146,11 @@ const ( // Special keys
 	KEY_F11      = 23
 	KEY_F12      = 24
 )
-const KEY_BACKSPACE = 127
+const (
+	KEY_TAB       = '\t'
+	KEY_ENTER     = '\n'
+	KEY_BACKSPACE = 127
+)
 const (
 	// The value of the next keys (except KEY_ESC) doesn't matter
 	KEY_UP = iota + 24
@@ -348,7 +352,9 @@ func charKeyEvent(ch rune, mod byte) KeyEvent {
 			mod |= MOD_SHIFT
 		}
 
-		if key&CTRL == key {
+		if key == KEY_ENTER || key == KEY_TAB {
+			// do not consider KEY_ENTER as ctrl+J or KEY_TAB as ctrl+i
+		} else if key&CTRL == key {
 			key |= '@'
 			mod |= MOD_CTRL
 		}
