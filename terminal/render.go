@@ -116,6 +116,14 @@ func ClearScreen() {
 	Write(CSI + "2J")
 }
 
+func ClearScreenBegin() {
+	Write(CSI + "1J")
+}
+
+func ClearScreenEnd() {
+	Write(CSI + "0J")
+}
+
 func ClearHistory() {
 	Write(CSI + "3J")
 }
