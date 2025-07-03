@@ -367,6 +367,10 @@ func specialKeyEvent(key byte) KeyEvent {
 	return KeyEvent{0, key, 0}
 }
 
+func escapeKeyEvent() KeyEvent {
+	return KeyEvent{ESC, ESC, 0}
+}
+
 func (parser *Parser) HandleRune(ch rune) {
 	if parser.escape {
 		parser.escape = false
@@ -381,7 +385,7 @@ func (parser *Parser) HandleRune(ch rune) {
 			}
 			return
 		}
-		parser.handler.HandleEvent(specialKeyEvent(ESC))
+		parser.handler.HandleEvent(escapeKeyEvent())
 	} else if parser.csi {
 		if parser.csi_argc >= CSI_ARGV_BUFFER_SIZE {
 			parser.csi = false
@@ -467,7 +471,7 @@ func (parser *Parser) HandleChar(ch byte) {
 func (parser *Parser) CheckEscape() {
 	if parser.escape && time.Since(parser.escape_time) > ALT_TIMEOUT {
 		parser.escape = false
-		parser.handler.HandleEvent(specialKeyEvent(ESC))
+		parser.handler.HandleEvent(escapeKeyEvent())
 	}
 }
 
