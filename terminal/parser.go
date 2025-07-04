@@ -121,7 +121,7 @@ const ( // MouseEvent.Button
 )
 
 const ( // MouseEvent.Mod / KeyEvent.Mod
-	MOD_SHIFT = 1 << (iota + 2)
+	MOD_SHIFT = 1 << iota
 	MOD_ALT
 	MOD_CTRL
 	MOD_META
@@ -179,7 +179,7 @@ func NewParser(handler event.Eventable) Parser {
 func (parser *Parser) handleMouseEvent() {
 	var ev MouseEvent
 	ev.Button = uint8(int32(parser.csi_argv[1]) & 3)
-	ev.Mod = uint8(int32(parser.csi_argv[1]) & 28)
+	ev.Mod = uint8(int32(parser.csi_argv[1])&28) >> 2
 	ev.X = uint16(int32(parser.csi_argv[2]) - 33)
 	ev.Y = uint16(int32(parser.csi_argv[3]) - 33)
 
@@ -260,23 +260,8 @@ func parseMod(arg int) byte {
 		1110	15	meta + ctrl + alt
 		1111	16	meta + ctrl + shift + alt
 	*/
-	var mod byte = 0
-	arg--
 
-	if arg&1 != 0 {
-		mod |= MOD_SHIFT
-	}
-	if arg&2 != 0 {
-		mod |= MOD_ALT
-	}
-	if arg&4 != 0 {
-		mod |= MOD_CTRL
-	}
-	if arg&8 != 0 {
-		mod |= MOD_META
-	}
-
-	return mod
+	return byte(arg) - 1
 }
 
 func (parser *Parser) handleCSI() {
