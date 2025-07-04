@@ -296,7 +296,7 @@ func (parser *Parser) handleCSI() {
 	ev.Key = byte(args[0])
 
 	switch c {
-	// For the sequences below ('A' to 'F'), args[0] should be 1 or 0 (not specified) but we won't check
+	// For the sequences below ('A' to 'H'), args[0] should be 1 or 0 (no argument) but we won't check
 	case 'A':
 		ev.Key = KEY_UP
 	case 'B':
