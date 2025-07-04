@@ -116,6 +116,8 @@ const ( // MouseEvent.Button
 	RELEASE
 	SCROLL_UP
 	SCROLL_DOWN
+	SCROLL_RIGHT
+	SCROLL_LEFT
 )
 
 const ( // MouseEvent.Mod / KeyEvent.Mod
