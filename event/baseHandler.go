@@ -31,6 +31,10 @@ type onable interface {
 func Bind[E Event](h onable, handler func(E)) {
 	var proto E
 
+	if any(proto) == nil {
+		panic("E must not be an interface")
+	}
+
 	h.On(proto.Name(), func(ev Event) {
 		handler(ev.(E))
 	})
