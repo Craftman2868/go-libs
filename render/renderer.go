@@ -2,6 +2,14 @@ package render
 
 import "github.com/Craftman2868/go-libs/event"
 
+type RenderEndEvent struct {
+	Elements []Element
+}
+
+func (RenderEndEvent) Name() string {
+	return "renderEnd"
+}
+
 type Renderer struct {
 	elements []Element
 	handler  event.Eventable
@@ -12,21 +20,21 @@ func (rndr *Renderer) Init(handler event.Eventable) {
 }
 
 func (rndr *Renderer) Render() {
-	renderHasBegun := false
+	var rendered []Element
 
 	for _, elem := range rndr.elements {
 		if !elem.NeedRender() {
 			continue
 		}
-		if !renderHasBegun {
+		if len(rendered) == 0 {
 			rndr.handler.HandleEvent(event.BaseEvent("renderBegin"))
-			renderHasBegun = true
 		}
 		elem.Render()
+		rendered = append(rendered, elem)
 	}
 
-	if renderHasBegun {
-		rndr.handler.HandleEvent(event.BaseEvent("renderEnd"))
+	if len(rendered) > 0 {
+		rndr.handler.HandleEvent(RenderEndEvent{rendered})
 	}
 }
 
