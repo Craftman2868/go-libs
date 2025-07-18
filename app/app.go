@@ -43,7 +43,3 @@ func (app *App) IsRunning() bool {
 func (app *App) Stop() {
 	app.running = false
 }
-
-func NewApp() App {
-	return App{}
-}
