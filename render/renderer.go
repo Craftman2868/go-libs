@@ -39,6 +39,8 @@ func (rndr *Renderer) Render() {
 }
 
 // The elements are rendered in the same order they are added
-func (rndr *Renderer) AddElement(elem Element) {
+func (rndr *Renderer) AddElement(elem Element) Element {
 	rndr.elements = append(rndr.elements, elem)
+
+	return elem
 }
