@@ -19,9 +19,7 @@ func (rndr *Renderer) Init(handler event.Eventable) {
 	rndr.handler = handler
 }
 
-func (rndr *Renderer) Render() {
-	var rendered []Element
-
+func (rndr *Renderer) Render() (rendered []Element) {
 	for _, elem := range rndr.elements {
 		if !elem.NeedRender() {
 			continue
@@ -36,6 +34,8 @@ func (rndr *Renderer) Render() {
 	if len(rendered) > 0 {
 		rndr.handler.HandleEvent(RenderEndEvent{rendered})
 	}
+
+	return
 }
 
 // The elements are rendered in the same order they are added
