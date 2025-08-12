@@ -45,3 +45,25 @@ func (elem *BaseElement) Render() {
 	elem.renderFunc()
 	elem.RenderEnd()
 }
+
+type AlwaysRender struct{}
+
+func (*AlwaysRender) NeedRender() bool {
+	return true
+}
+
+type Visibility struct {
+	Visible bool
+}
+
+func (elem *Visibility) NeedRender() bool {
+	return elem.Visible
+}
+
+func (elem *Visibility) Show() {
+	elem.Visible = true
+}
+
+func (elem *Visibility) Hide() {
+	elem.Visible = false
+}
