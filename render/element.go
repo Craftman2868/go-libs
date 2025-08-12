@@ -5,34 +5,38 @@ type Element interface {
 	Render()
 }
 
+type UpdatableElement interface {
+	Updated() bool
+}
+
 // Doesn't implement Element, to be embedded in another struct with a Render() method
-type UpdatableElement struct {
+type Updatable struct {
 	updated bool
 }
 
 // Should not be called in any element's Render() method
-func (elem *UpdatableElement) Updated() {
+func (elem *Updatable) Updated() {
 	elem.updated = true
 }
 
 // To be called at the end of the Render() method
-func (elem *UpdatableElement) RenderEnd() {
+func (elem *Updatable) RenderEnd() {
 	elem.updated = false
 }
 
-func (elem *UpdatableElement) NeedRender() bool {
+func (elem *Updatable) NeedRender() bool {
 	return elem.updated
 }
 
 type BaseElement struct {
-	UpdatableElement
+	Updatable
 
 	renderFunc func()
 }
 
 func NewBaseElement(renderFunc func()) *BaseElement {
 	return &BaseElement{
-		UpdatableElement{true},
+		Updatable{true},
 		renderFunc,
 	}
 }
